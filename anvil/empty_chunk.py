@@ -33,7 +33,7 @@ class EmptyChunk:
     def __init__(self, x: int, z: int):
         self.x = x
         self.z = z
-        self.sections: List[EmptySection] = [None]*16
+        self.sections: List[EmptySection] = [None]*20
         self.biomes: List[Biome] = [Biome('ocean')]*16*16
         self.version = 1976
 
@@ -83,8 +83,8 @@ class EmptyChunk:
             raise OutOfBoundsCoordinates(f'X ({x!r}) must be in range of 0 to 15')
         if z not in range(16):
             raise OutOfBoundsCoordinates(f'Z ({z!r}) must be in range of 0 to 15')
-        if (y + 64) not in range(384):
-            raise OutOfBoundsCoordinates(f'Y ({y!r}) must be in range of 0 to 383')
+        if y not in range(-64, 320):
+            raise OutOfBoundsCoordinates(f'Y ({y!r}) must be in range of -64 to 319')
         section = self.sections[y // 16]
         if section is None:
             return
@@ -110,8 +110,8 @@ class EmptyChunk:
             raise OutOfBoundsCoordinates(f'X ({x!r}) must be in range of 0 to 15')
         if z not in range(16):
             raise OutOfBoundsCoordinates(f'Z ({z!r}) must be in range of 0 to 15')
-        if (y + 64) not in range(384):
-            raise OutOfBoundsCoordinates(f'Y ({y!r}) must be in range of 0 to 383')
+        if y not in range(-64, 320):
+            raise OutOfBoundsCoordinates(f'Y ({y!r}) must be in range of -64 to 319')
         section = self.sections[y // 16]
         if section is None:
             section = EmptySection(y // 16)
