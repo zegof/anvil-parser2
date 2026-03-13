@@ -4,6 +4,8 @@ from .errors import OutOfBoundsCoordinates
 from nbt import nbt
 from struct import Struct
 import array
+from .versions import VERSIONS
+from .config import config
 
 # dirty mixin to change q to Q
 def _update_fmt(self, length):
@@ -31,13 +33,15 @@ class EmptySection:
     air: :class:`Block`
         An air block
     """
-    __slots__ = ('y', 'blocks', 'air')
+    __slots__ = ('y', 'blocks', 'air', 'version')
     def __init__(self, y: int):
         self.y = y
         # None is the same as an air block
         self.blocks: List[Block] = [None] * 4096
         # Block that will be used when None
         self.air = Block('minecraft', 'air')
+
+        self.version = config["version"]
 
     @staticmethod
     def inside(x: int, y: int, z: int) -> bool:
@@ -116,26 +120,62 @@ class EmptySection:
         """
         palette = palette or self.palette()
         bits = max((len(palette) - 1).bit_length(), 4)
-        states = array.array('Q')
-        current = 0
-        current_len = 0
-        for block in self.blocks:
+
+        # in 20w17a and newer blocks cannot occupy more than one element on the BlockStates array
+        # For better understanding of this, read get_block's source in the "Chunk" class in chunk.py 
+        stretches = self.version < VERSIONS.VERSION_20W17A
+
+        if stretches:
+            # every entry is 8 bytes long ('Q')
+            # later in code for nbt.TAG_Long_Array
+            states = array.array('Q')
+            current = 0
+            current_len = 0
+        else:
+            # one block per element of the array
+            # 8*8=64
+            blocks_per_entry = 64 // bits
+            total_entries = (len(self.blocks) + blocks_per_entry - 1) // blocks_per_entry
+            states = array.array('Q', [0] * total_entries)
+
+
+
+        for local_blocks_index, block in enumerate(self.blocks):
             if block is None:
-                index = palette.index(self.air)
+                if self.version < VERSIONS.VERSION_17W47A:
+                    # blocks are saved using numeric id's
+                    palette_index = palette.index(0)
+                else:
+                    palette_index = palette.index(self.air)
             else:
-                index = palette.index(block)
-            # If it's more than 64 bits then add to list and start over
-            # with the remaining bits from last one
-            if current_len + bits > 64:
-                leftover = 64 - current_len
-                states.append(bin_append(index & ((1 << leftover) - 1), current, length=current_len))
-                current = index >> leftover
-                current_len = bits - leftover
+                if self.version < VERSIONS.VERSION_17W47A:
+                    # blocks are saved using numeric id's
+                    palette_index = palette.index(None) # TODO
+                else:
+                    palette_index = palette.index(block)
+
+                    
+            if stretches:
+
+                # If it's more than 64 bits then add to list and start over
+                # with the remaining bits from last one
+                if current_len + bits > 64:
+                    leftover = 64 - current_len
+                    states.append(bin_append(palette_index & ((1 << leftover) - 1), current, length=current_len))
+                    current = palette_index >> leftover
+                    current_len = bits - leftover
+                else:    
+                    current = bin_append(palette_index, current, length=current_len)
+                    current_len += bits
+                states.append(current)
+                
             else:
-                current = bin_append(index, current, length=current_len)
-                current_len += bits
-        states.append(current)
+                array_index = local_blocks_index // blocks_per_entry
+                offset = (local_blocks_index % blocks_per_entry) * bits
+                states[array_index] |= palette_index << offset
+
         return states
+
 
     def save(self) -> nbt.TAG_Compound:
         """
@@ -146,7 +186,10 @@ class EmptySection:
         root.tags.append(nbt.TAG_Byte(name='Y', value=self.y))
 
         palette = self.palette()
-        nbt_pal = nbt.TAG_List(name='Palette', type=nbt.TAG_Compound)
+        if self.version >= VERSIONS.VERSION_21W43A:
+            nbt_pal = nbt.TAG_List(name='palette', type=nbt.TAG_Compound)
+        else:
+            nbt_pal = nbt.TAG_List(name='Palette', type=nbt.TAG_Compound)
         for block in palette:
             tag = nbt.TAG_Compound()
             tag.tags.append(nbt.TAG_String(name='Name', value=block.name()))
@@ -167,11 +210,20 @@ class EmptySection:
                         properties.tags.append(value)
                 tag.tags.append(properties)
             nbt_pal.tags.append(tag)
-        root.tags.append(nbt_pal)
+        
 
         states = self.blockstates(palette=palette)
-        bstates = nbt.TAG_Long_Array(name='BlockStates')
-        bstates.value = states
+        if self.version >= VERSIONS.VERSION_21W43A:
+            bstates = nbt.TAG_Compound(name='block_states')
+            bstates_data = nbt.TAG_Long_Array('data')
+            bstates_data.value = states
+            bstates.tags.append(bstates_data)
+            bstates.tags.append(nbt_pal)
+        else:
+            root.tags.append(nbt_pal)
+            bstates = nbt.TAG_Long_Array(name='BlockStates')
+            bstates.value = states
+
         root.tags.append(bstates)
 
         return root

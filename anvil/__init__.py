@@ -6,3 +6,5 @@ from .empty_region import EmptyRegion
 from .empty_chunk import EmptyChunk
 from .empty_section import EmptySection
 from .raw_section import RawSection
+from .versions import VERSIONS
+from .config import config

@@ -7,7 +7,7 @@ setuptools.setup(
     name='anvil-parser2',
     version='0.10.6',
     author='0xTiger',
-    description='A parser for the Minecraft anvil file format, supports all Minecraft verions',
+    description='A parser for the Minecraft anvil file format, supports all Minecraft versions',
     long_description=long_description,
     long_description_content_type='text/markdown',
     url='https://github.com/0xTiger/anvil-parser2',

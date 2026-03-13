@@ -5,6 +5,9 @@ from .empty_section import EmptySection
 from .errors import OutOfBoundsCoordinates, EmptySectionAlreadyExists
 from nbt import nbt
 from .legacy import LEGACY_BIOMES_ID_MAP
+from .versions import VERSIONS
+from .config import config
+
 
 
 def _get_legacy_biome_id(biome: Biome) -> int:
@@ -33,9 +36,13 @@ class EmptyChunk:
     def __init__(self, x: int, z: int):
         self.x = x
         self.z = z
-        self.sections: List[EmptySection] = [None]*20
+        self.version = config["version"]
+        if self.version >= VERSIONS.VERSION_EXPERIMENTAL_SNAPSHOT_1:
+            self.sections: List[EmptySection] = [None]*24
+        else:
+            self.sections: List[EmptySection] = [None]*16
         self.biomes: List[Biome] = [Biome('ocean')]*16*16
-        self.version = 1976
+
 
     def add_section(self, section: EmptySection, replace: bool = True):
         """
@@ -66,7 +73,10 @@ class EmptyChunk:
         int x, z
             In range of 0 to 15
         y
-            In range of -64 to 255
+            if version >= experimental_snapshot_1:
+                In range of -64 to 319
+            if version < experimental_snapshot_1:
+                In range of 0 to 255
 
         Raises
         ------
@@ -83,8 +93,14 @@ class EmptyChunk:
             raise OutOfBoundsCoordinates(f'X ({x!r}) must be in range of 0 to 15')
         if z not in range(16):
             raise OutOfBoundsCoordinates(f'Z ({z!r}) must be in range of 0 to 15')
-        if y not in range(-64, 320):
-            raise OutOfBoundsCoordinates(f'Y ({y!r}) must be in range of -64 to 319')
+        
+        if self.version >= VERSIONS.VERSION_EXPERIMENTAL_SNAPSHOT_1:
+            if y not in range(-64, 320):
+                raise OutOfBoundsCoordinates(f'Y ({y!r}) must be in range of -64 to 319')
+        else:
+            if y not in range(256):
+                raise OutOfBoundsCoordinates(f'Y ({y!r}) must be in range of 0 to 255')
+
         section = self.sections[y // 16]
         if section is None:
             return
@@ -99,7 +115,10 @@ class EmptyChunk:
         int x, z
             In range of 0 to 15
         y
-            In range of -64 to 255
+            if version >= experimental_snapshot_1:
+                In range of -64 to 319
+            if version < experimental_snapshot_1:
+                In range of 0 to 255
 
         Raises
         ------
@@ -110,15 +129,21 @@ class EmptyChunk:
             raise OutOfBoundsCoordinates(f'X ({x!r}) must be in range of 0 to 15')
         if z not in range(16):
             raise OutOfBoundsCoordinates(f'Z ({z!r}) must be in range of 0 to 15')
-        if y not in range(-64, 320):
-            raise OutOfBoundsCoordinates(f'Y ({y!r}) must be in range of -64 to 319')
+
+        if self.version >= VERSIONS.VERSION_EXPERIMENTAL_SNAPSHOT_1:
+            if y not in range(-64, 320):
+                raise OutOfBoundsCoordinates(f'Y ({y!r}) must be in range of -64 to 319')
+        else:
+            if y not in range(256):
+                raise OutOfBoundsCoordinates(f'Y ({y!r}) must be in range of 0 to 255')
+
         section = self.sections[y // 16]
         if section is None:
             section = EmptySection(y // 16)
             self.add_section(section)
         section.set_block(block, x, y % 16, z)
 
-    def set_biome(self, biome: Biome, x: int, z: int):
+    def set_biome(self, biome: Biome, x: int, z: int, y: int | None = None):
         """
         Sets biome at given coordinates
         
@@ -126,6 +151,11 @@ class EmptyChunk:
         ----------
         int x, z
             In range of 0 to 15
+        int y (only required for versions >= 19w36a)
+            if version >= experimental_snapshot_1:
+                In range of -64 to 319
+            if version < experimental_snapshot_1:
+                In range of 0 to 255
 
         Raises
         ------
@@ -137,8 +167,25 @@ class EmptyChunk:
             raise OutOfBoundsCoordinates(f'X ({x!r}) must be in range of 0 to 15')
         if z not in range(16):
             raise OutOfBoundsCoordinates(f'Z ({z!r}) must be in range of 0 to 15')
+        
 
-        index = z * 16 + x
+        if self.version < VERSIONS.VERSION_19W36A:
+            
+            # Each biome index refers to a column stored Z then X.
+            index = z * 16 + x
+        else:
+            # y is only required for versions > 19w36a
+            if self.version >= VERSIONS.VERSION_EXPERIMENTAL_SNAPSHOT_1:
+                if y not in range(-64, 320):
+                    raise OutOfBoundsCoordinates(f'Y ({y!r}) must be in range of -64 to 319')
+            else:
+                if y not in range(256):
+                    raise OutOfBoundsCoordinates(f'Y ({y!r}) must be in range of 0 to 255')
+
+            # https://minecraft.wiki/w/Java_Edition_19w36a
+            # Get index on the biome list with the order YZX
+            # Each biome index refers to a 4x4 areas here so we do integer division by 4
+            index = (y // 4) * 4 * 4 + (z // 4) * 4 + (x // 4)
         self.biomes[index] = biome
 
     def save(self) -> nbt.NBTFile:
@@ -156,19 +203,36 @@ class EmptyChunk:
         # Needs to be in a separate line because it just gets
         # ignored if you pass it as a kwarg in the constructor
         level.name = 'Level'
-        level.tags.extend([
-            nbt.TAG_List(name='Entities', type=nbt.TAG_Compound),
-            nbt.TAG_List(name='TileEntities', type=nbt.TAG_Compound),
-            nbt.TAG_List(name='LiquidTicks', type=nbt.TAG_Compound),
-            nbt.TAG_Int(name='xPos', value=self.x),
-            nbt.TAG_Int(name='zPos', value=self.z),
-            nbt.TAG_Long(name='LastUpdate', value=0),
-            nbt.TAG_Long(name='InhabitedTime', value=0),
-            nbt.TAG_Byte(name='isLightOn', value=1),
-            nbt.TAG_String(name='Status', value='full')
-        ])
-        sections = nbt.TAG_List(name='Sections', type=nbt.TAG_Compound)
-        biomes = nbt.TAG_Int_Array(name='Biomes')
+
+        if self.version >= VERSIONS.VERSION_21W43A:
+            level.tags.extend([
+                nbt.TAG_List(name='entities', type=nbt.TAG_Compound),
+                nbt.TAG_List(name='block_entities', type=nbt.TAG_Compound),
+                nbt.TAG_List(name='fluid_ticks', type=nbt.TAG_Compound),
+                nbt.TAG_Int(name='xPos', value=self.x),
+                nbt.TAG_Int(name='zPos', value=self.z),
+                nbt.TAG_Int(name='yPos', value=-4),
+                nbt.TAG_Long(name='LastUpdate', value=0),
+                nbt.TAG_Long(name='InhabitedTime', value=0),
+                nbt.TAG_Byte(name='isLightOn', value=1),
+                nbt.TAG_String(name='Status', value='full')
+            ])
+            sections = nbt.TAG_List(name='sections', type=nbt.TAG_Compound)
+            biomes = nbt.TAG_Int_Array(name='biomes') #TODO check if this is moved to sections
+        else: 
+            level.tags.extend([
+                nbt.TAG_List(name='Entities', type=nbt.TAG_Compound),
+                nbt.TAG_List(name='TileEntities', type=nbt.TAG_Compound),
+                nbt.TAG_List(name='LiquidTicks', type=nbt.TAG_Compound),
+                nbt.TAG_Int(name='xPos', value=self.x),
+                nbt.TAG_Int(name='zPos', value=self.z),
+                nbt.TAG_Long(name='LastUpdate', value=0),
+                nbt.TAG_Long(name='InhabitedTime', value=0),
+                nbt.TAG_Byte(name='isLightOn', value=1),
+                nbt.TAG_String(name='Status', value='full')
+            ])
+            sections = nbt.TAG_List(name='Sections', type=nbt.TAG_Compound)
+            biomes = nbt.TAG_Int_Array(name='Biomes')
 
         biomes.value = [_get_legacy_biome_id(biome) for biome in self.biomes]
         for s in self.sections:
@@ -181,5 +245,11 @@ class EmptyChunk:
                 sections.tags.append(s.save())
         level.tags.append(sections)
         level.tags.append(biomes)
-        root.tags.append(level)
+        
+        if self.version >= VERSIONS.VERSION_21W43A:
+            for tag in level.tags:
+                root.tags.append(tag)
+        else:
+            root.tags.append(level)
+
         return root

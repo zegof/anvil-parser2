@@ -48,6 +48,27 @@ for y in range(16):
 # Save to a file
 region.save('r.0.0.mca')
 ```
+### Version support
+If you want to create regions for older versions, you need to set the version before you create your first region/chunk
+
+Supported versions are found [here](anvil/versions.py). This only contains major Minecraft updates. If you want to see all versions, see [versions](https://minecraft.wiki/w/Data_version)
+
+If you open an anvil file in a newer Minecraft version, it will automaticly convert it to the newer version, nevertheless it's not recomended.
+
+```python
+import anvil
+
+# set the version, for example to 19w36a
+anvil.config["version"] = anvil.VERSIONS.VERSION_19W36A
+
+# region will be created for this specific version
+region = anvil.EmptyRegion(0, 0)
+region.save('r.0.0.mca')
+
+```
+> [!WARNING]
+Don't change the version after the first creation of a region / section / chunk or the result will be corrupted
+
 # Todo
 *things to do before 1.0.0*
 - [x] Proper documentation

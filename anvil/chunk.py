@@ -4,7 +4,7 @@ from .biome import Biome
 from .block import Block, OldBlock
 from .region import Region
 from .errors import OutOfBoundsCoordinates, ChunkNotFound
-from .versions import VERSION_21w43a, VERSION_20w17a, VERSION_19w36a, VERSION_17w47a, VERSION_PRE_15w32a
+from .versions import VERSIONS
 
 
 def bin_append(a, b, length=None):
@@ -34,6 +34,7 @@ def _palette_from_section(section: nbt.TAG_Compound) -> nbt.TAG_List:
 def _states_from_section(section: nbt.TAG_Compound) -> list:
         # BlockStates is an array of 64 bit numbers
         # that holds the blocks index on the palette list
+        # TODO needs to improved with version system
         if 'block_states' in section:
             states = section['block_states']['data']
         else:
@@ -48,7 +49,7 @@ def _states_from_section(section: nbt.TAG_Compound) -> list:
 
 
 def _section_height_range(version: Optional[int]) -> range:
-    if version > VERSION_17w47a:
+    if version > VERSIONS.VERSION_17W47A:
         return range(-4, 20)
     else:
         return range(16)
@@ -82,9 +83,9 @@ class Chunk:
         except KeyError:
             # Version is pre-1.9 snapshot 15w32a, so world does not have a Data Version.
             # See https://minecraft.wiki/w/Data_version
-            self.version = VERSION_PRE_15w32a
+            self.version = VERSIONS.VERSION_PRE_15W32A
 
-        if self.version >= VERSION_21w43a:
+        if self.version >= VERSIONS.VERSION_21W43A:
             self.data = nbt_data
             self.tile_entities = self.data["block_entities"]
         else:
@@ -212,7 +213,7 @@ class Chunk:
 
         else:
             biomes = self.data["Biomes"]
-            if self.version < VERSION_19w36a:
+            if self.version < VERSIONS.VERSION_19W36A:
                 # Each biome index refers to a column stored Z then X.
                 index = z * 16 + x
             else:
@@ -266,7 +267,7 @@ class Chunk:
             # global Y to section Y
             y %= 16
 
-        if self.version < VERSION_17w47a:
+        if self.version < VERSIONS.VERSION_17W47A:
             # Explained in depth here https://minecraft.wiki/w/index.php?title=Chunk_format&oldid=1153403#Block_format
 
             if section is None or "Blocks" not in section:
@@ -306,7 +307,7 @@ class Chunk:
         # Get index on the block list with the order YZX
         index = y * 16 * 16 + z * 16 + x
         # in 20w17a and newer blocks cannot occupy more than one element on the BlockStates array
-        stretches = self.version < VERSION_20w17a
+        stretches = self.version < VERSIONS.VERSION_20W17A
 
         # get location in the BlockStates array via the index
         if stretches:
@@ -388,7 +389,7 @@ class Chunk:
         if section is None or isinstance(section, int):
             section = self.get_section(section or 0)
 
-        if self.version < VERSION_17w47a:
+        if self.version < VERSIONS.VERSION_17W47A:
             if section is None or "Blocks" not in section:
                 air = Block.from_name("minecraft:air") if force_new else OldBlock(0)
                 for _ in range(4096):
@@ -426,7 +427,7 @@ class Chunk:
         palette = _palette_from_section(section)
         bits = max((len(palette) - 1).bit_length(), 4)
 
-        stretches = self.version < VERSION_20w17a
+        stretches = self.version < VERSIONS.VERSION_20W17A
 
         if stretches:
             state = index * bits // 64

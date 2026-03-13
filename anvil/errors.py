@@ -12,3 +12,9 @@ class EmptySectionAlreadyExists(Exception):
 
 class GZipChunkData(Exception):
     """Exception used when trying to get chunk data compressed in gzip"""
+
+class UnknownVersionId(Exception):
+    """Exception used when a Unkown version is specified"""
+
+class UnknownConfigSetting(Exception):
+    """Exeption used when trying to set an unkown config setting"""

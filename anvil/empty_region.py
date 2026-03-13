@@ -5,7 +5,8 @@ from .empty_section import EmptySection
 from .block import Block
 from .biome import Biome
 from .errors import OutOfBoundsCoordinates
-from .versions import VERSION_21w43a
+from .versions import VERSIONS
+from .config import config
 from io import BytesIO
 from nbt import nbt
 import zlib
@@ -27,12 +28,13 @@ class EmptyRegion:
     x: :class:`int`
     z: :class:`int`
     """
-    __slots__ = ('chunks', 'x', 'z')
+    __slots__ = ('chunks', 'x', 'z', 'version')
     def __init__(self, x: int, z: int):
         # Create a 1d list for the 32x32 chunks
         self.chunks: List[EmptyChunk] = [None] * 1024
         self.x = x
         self.z = z
+        self.version = config["version"]
 
     def inside(self, x: int, y: int, z: int, chunk: bool=False) -> bool:
         """
@@ -48,7 +50,10 @@ class EmptyRegion:
         factor = 32 if chunk else 512
         rx = x // factor
         rz = z // factor
-        return not (rx != self.x or rz != self.z or y not in range(-64, 320))
+        if self.version >= VERSIONS.VERSION_EXPERIMENTAL_SNAPSHOT_1:
+            return not (rx != self.x or rz != self.z or y not in range(-64, 320))
+        else:
+            return not (rx != self.x or rz != self.z or y not in range(256))
 
     def get_chunk(self, x: int, z: int) -> EmptyChunk:
         """
@@ -224,7 +229,7 @@ class EmptyRegion:
             if not self.inside(x1, y1, z1):
                 raise OutOfBoundsCoordinates(f'First coords ({x1}, {y1}, {z1}) is not inside this region')
             if not self.inside(x2, y2, z2):
-                raise OutOfBoundsCoordinates(f'Second coords ({x}, {y}, {z}) is not inside this region')
+                raise OutOfBoundsCoordinates(f'Second coords ({x2}, {y2}, {z2}) is not inside this region')
 
         for y in from_inclusive(y1, y2):
             for z in from_inclusive(z1, z2):
@@ -291,7 +296,7 @@ class EmptyRegion:
                 nbt_data = nbt.NBTFile()
                 nbt_data.tags.append(nbt.TAG_Int(name='DataVersion', value=chunk.version))
 
-                if chunk.version >= VERSION_21W43A:
+                if chunk.version >= VERSIONS.VERSION_21W43A:
                     for tag in chunk.data.tags:
                         nbt_data.tags.append(tag)
                 else:
