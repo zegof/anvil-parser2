@@ -76,5 +76,6 @@ Don't change the version after the first creation of a region / section / chunk 
 - [x] CI
 - [ ] More tests
   - [ ] Tests for 20w17a+ BlockStates format
+  - [ ] Tests for all (supported) (data_)versions
 # Note
 Testing done in 1.14.4 - 1.21, should work fine for other versions.

@@ -1,5 +1,5 @@
 import context as _
-from anvil import EmptyRegion, Block, RawSection
+from anvil import EmptyRegion, Block, RawSection, OldBlock
 import math
 import time
 import logging
@@ -43,7 +43,7 @@ def test_benchmark():
 def test_raw_section():
     region = EmptyRegion(0, 0)
 
-    block = Block('iron_block')
+    block = Block('stone')
     air = Block('air')
     palette = (air, block)
 
@@ -53,22 +53,23 @@ def test_raw_section():
     w = 256
     chunk_w = w // 16
     scale = 0.05
-    y_scale = 15
+    y_scale = 20
 
     start = time.time()
 
-    # from 0 to y_scale
+    # TODO: multiple version
+    # from -64 319 to y_scale
     heights = array.array('B')
-    for z in range(w):
+    for z in range(-64, 320):
         for x in range(w):
             u = z - w / 2
             v = x - w / 2
-            height = int(func(u * scale, v * scale) * y_scale)
+            height = int(func(u * scale, v * scale) * y_scale) #TODO: also test NEGATIVE cordinates!
             heights.append(height)
             
     for chunk_x in range(chunk_w):
         for chunk_z in range(chunk_w):
-            blocks = array.array('B')
+            blocks = list()
             for y in range(16):
                 for z in range(16):
                     for x in range(16):
@@ -77,9 +78,9 @@ def test_raw_section():
                         i = rz * w + rx
                         height = heights[i]
                         if y == height:
-                            blocks.append(1)
+                            blocks.append(Block.from_numeric_id(1))
                         else:
-                            blocks.append(0)
+                            blocks.append(Block.from_numeric_id(0))
             region.add_section(RawSection(0, blocks, palette), chunk_x, chunk_z)
 
     end = time.time()
@@ -100,22 +101,22 @@ def test_raw_section_simple():
     region = EmptyRegion(0, 0)
 
     air = Block('air')
-    palette = (air, Block('white_concrete'), Block('light_gray_concrete'), Block('gray_concrete'))
+    palette = (air, Block('white_concrete'), Block('light_gray_concrete'), Block('stone'), Block('grass_block'), Block('dirt'))
 
-    blocks = array.array('B')
+    blocks = list()
     for z in range(16):
         for x in range(16):
             d = x * x + z * z
             if d < 25:
-                blocks.append(1)
+                blocks.append(Block.from_numeric_id(1))
             elif d < 100:
-                blocks.append(2)
+                blocks.append(Block.from_numeric_id(2))
             elif d < 225:
-                blocks.append(3)
+                blocks.append(Block.from_numeric_id(3))
             else:
-                blocks.append(0)
+                blocks.append(Block.from_numeric_id(0))
 
-    blocks.extend(0 for _ in range(16 * 16 * 16 - len(blocks)))
+    blocks.extend(None for _ in range(16 * 16 * 16 - len(blocks)))
 
     assert len(blocks) == 16 * 16 * 16
     
